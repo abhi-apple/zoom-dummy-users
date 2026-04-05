@@ -1,0 +1,23 @@
+index.js
+  f0c231cf5013aaee 5,7,76-102,104-108,113,133,140,146-149,164-166,171-173,192,195-198,202,296,309-310,315
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "93155166640664edebd67555eae3c1ed9c086e77",
+  "prompts": {
+    "f0c231cf5013aaee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67a7ecba-40ec-4f2a-a8c8-0574bd79e8c0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "jobsforceai",
+      "messages": [],
+      "total_additions": 57,
+      "total_deletions": 68,
+      "accepted_lines": 57,
+      "overriden_lines": 0
+    }
+  }
+}
