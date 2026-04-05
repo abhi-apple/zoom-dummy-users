@@ -3,13 +3,13 @@ const readline = require("readline");
 
 const sessions = [];
 const browsers = [];
-let nameIndex = NAME_OFFSET;
 const CONTEXTS_PER_BROWSER = 10;
 
 const MEETING_ID = process.argv[2] || process.env.ZOOM_MEETING_ID;
 const PASSCODE = process.argv[3] || process.env.ZOOM_PASSCODE || "";
 const NUM_USERS = parseInt(process.argv[4] || process.env.ZOOM_NUM_USERS) || 5;
 const NAME_OFFSET = parseInt(process.env.ZOOM_NAME_OFFSET) || 0;
+let nameIndex = NAME_OFFSET;
 
 const FAKE_NAMES = [
   "Venkateswara Rao P",
