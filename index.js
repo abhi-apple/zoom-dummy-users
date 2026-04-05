@@ -2,8 +2,9 @@ const { chromium } = require("playwright");
 const readline = require("readline");
 
 const sessions = [];
-let browser = null;
+const browsers = [];
 let nameIndex = 0;
+const CONTEXTS_PER_BROWSER = 10;
 
 const MEETING_ID = process.argv[2] || process.env.ZOOM_MEETING_ID;
 const PASSCODE = process.argv[3] || process.env.ZOOM_PASSCODE || "";
@@ -72,53 +73,49 @@ const FAKE_NAMES = [
   "Prasada Rao V",
 ];
 
-async function getBrowser() {
-  if (!browser) {
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        "--disable-audio-output",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "--disable-software-rasterizer",
-        "--disable-extensions",
-        "--disable-background-networking",
-        "--disable-sync",
-        "--disable-translate",
-        "--disable-logging",
-        "--disable-notifications",
-        "--disable-default-apps",
-        "--disable-component-update",
-        "--disable-domain-reliability",
-        "--disable-client-side-phishing-detection",
-        "--disable-hang-monitor",
-        "--disable-popup-blocking",
-        "--disable-prompt-on-repost",
-        "--disable-renderer-backgrounding",
-        "--disable-backgrounding-occluded-windows",
-        "--disable-ipc-flooding-protection",
-        "--no-first-run",
-        "--no-sandbox",
-        "--no-zygote",
-        "--single-process",
-        "--js-flags=--max-old-space-size=32 --lite-mode",
-        "--renderer-process-limit=1",
-        "--memory-pressure-off",
-      ],
-    });
+const BROWSER_ARGS = [
+  "--disable-audio-output",
+  "--disable-gpu",
+  "--disable-dev-shm-usage",
+  "--disable-software-rasterizer",
+  "--disable-extensions",
+  "--disable-background-networking",
+  "--disable-sync",
+  "--disable-translate",
+  "--disable-logging",
+  "--disable-notifications",
+  "--disable-default-apps",
+  "--disable-hang-monitor",
+  "--disable-popup-blocking",
+  "--disable-renderer-backgrounding",
+  "--disable-backgrounding-occluded-windows",
+  "--no-first-run",
+  "--no-sandbox",
+  "--js-flags=--max-old-space-size=64",
+];
+
+async function getOrCreateBrowser() {
+  // Find a browser that has room for more contexts
+  for (const b of browsers) {
+    if (b.contexts().length < CONTEXTS_PER_BROWSER + 1) {
+      return b;
+    }
   }
-  return browser;
+  // All full, create a new one
+  const b = await chromium.launch({ headless: true, args: BROWSER_ARGS });
+  browsers.push(b);
+  console.log(`  [browser] Launched browser #${browsers.length}`);
+  return b;
 }
 
 async function joinMeeting(name, meetingId, passcode) {
   try {
-    const b = await getBrowser();
+    const b = await getOrCreateBrowser();
 
     const context = await b.newContext({
       permissions: [],
       userAgent:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-      // Tiny viewport to reduce rendering memory
       viewport: { width: 320, height: 240 },
     });
 
@@ -133,22 +130,23 @@ async function joinMeeting(name, meetingId, passcode) {
       navigator.mediaDevices.enumerateDevices = async () => [];
     });
 
-    // Block ALL heavy resources — images, fonts, css, media, wasm
+    // Block heavy resources
     await page.route("**/*", (route) => {
       const type = route.request().resourceType();
       if (["image", "font", "stylesheet", "media"].includes(type)) {
         return route.abort();
       }
-      // Block wasm and large JS chunks we don't need
       const url = route.request().url();
-      if (url.endsWith(".wasm") || url.includes("video") || url.includes("audio_")) {
+      if (url.endsWith(".wasm") || url.includes("video_") || url.includes("audio_")) {
         return route.abort();
       }
       return route.continue();
     });
 
-    const joinUrl = `https://zoom.us/wc/join/${meetingId}`;
-    await page.goto(joinUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.goto(`https://zoom.us/wc/join/${meetingId}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
 
     // Accept cookies
     try {
@@ -163,16 +161,16 @@ async function joinMeeting(name, meetingId, passcode) {
     // Fill passcode
     if (passcode) {
       try {
-        const passcodeInput = page.locator('input[id="input-for-pwd"]');
-        await passcodeInput.waitFor({ state: "visible", timeout: 5000 });
-        await passcodeInput.fill(passcode);
+        const pwd = page.locator('input[id="input-for-pwd"]');
+        await pwd.waitFor({ state: "visible", timeout: 5000 });
+        await pwd.fill(passcode);
       } catch {}
     }
 
     // Join
-    const joinButton = page.locator("button.zm-btn--primary, button:has-text('Join')").first();
-    await joinButton.waitFor({ state: "visible", timeout: 10000 });
-    await joinButton.click();
+    const joinBtn = page.locator("button.zm-btn--primary, button:has-text('Join')").first();
+    await joinBtn.waitFor({ state: "visible", timeout: 10000 });
+    await joinBtn.click();
 
     await page.waitForTimeout(5000);
 
@@ -191,24 +189,17 @@ async function joinMeeting(name, meetingId, passcode) {
       await page.locator("button:has-text('Mute'), button[aria-label*='mute my audio']").first().click({ timeout: 3000 });
     } catch {}
 
-    // After joining, strip the page DOM to free memory — WebSocket stays alive
+    // Reduce memory after joining — hide UI, remove heavy elements
     await page.evaluate(() => {
-      // Remove all video/canvas elements
       document.querySelectorAll("video, canvas, img, svg").forEach((el) => el.remove());
-      // Remove heavy UI elements but keep the connection scripts running
-      const body = document.body;
-      if (body) {
-        // Remove all visible UI to free rendering memory
-        body.style.display = "none";
-      }
-      // Disable CSS animations/transitions
-      const style = document.createElement("style");
-      style.textContent = "* { animation: none !important; transition: none !important; }";
-      document.head.appendChild(style);
+      document.body.style.display = "none";
+      const s = document.createElement("style");
+      s.textContent = "* { animation: none !important; transition: none !important; }";
+      document.head.appendChild(s);
     });
 
     console.log(`  [+] ${name} joined`);
-    return { context, page, name };
+    return { context, page, name, browser: b };
   } catch (error) {
     console.error(`  [x] ${name} failed: ${error.message}`);
     return null;
@@ -216,7 +207,6 @@ async function joinMeeting(name, meetingId, passcode) {
 }
 
 async function addUsers(count, meetingId, passcode) {
-  // Join ONE at a time to avoid memory spikes
   let added = 0;
   for (let i = 0; i < count; i++) {
     const name = nameIndex < FAKE_NAMES.length
@@ -278,7 +268,6 @@ async function main() {
     output: process.stdout,
     prompt: "> ",
   });
-
   rl.prompt();
 
   rl.on("line", async (line) => {
@@ -304,7 +293,7 @@ async function main() {
     } else if (cmd === "exit" || cmd === "quit") {
       console.log("  Removing all users...");
       await removeUsers(sessions.length);
-      if (browser) await browser.close();
+      for (const b of browsers) await b.close().catch(() => {});
       console.log("  Done. Bye!");
       process.exit(0);
     } else if (cmd === "help") {
@@ -317,13 +306,13 @@ async function main() {
 }
 
 process.on("SIGINT", () => {
-  console.log("\nKilling browser...");
-  if (browser) try { browser.process().kill("SIGKILL"); } catch {}
+  console.log("\nKilling all browsers...");
+  for (const b of browsers) try { b.process().kill("SIGKILL"); } catch {}
   console.log("All disconnected.");
   process.exit(0);
 });
 process.on("SIGTERM", () => {
-  if (browser) try { browser.process().kill("SIGKILL"); } catch {}
+  for (const b of browsers) try { b.process().kill("SIGKILL"); } catch {}
   process.exit(0);
 });
 
