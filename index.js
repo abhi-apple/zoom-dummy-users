@@ -3,12 +3,13 @@ const readline = require("readline");
 
 const sessions = [];
 const browsers = [];
-let nameIndex = 0;
+let nameIndex = NAME_OFFSET;
 const CONTEXTS_PER_BROWSER = 10;
 
 const MEETING_ID = process.argv[2] || process.env.ZOOM_MEETING_ID;
 const PASSCODE = process.argv[3] || process.env.ZOOM_PASSCODE || "";
 const NUM_USERS = parseInt(process.argv[4] || process.env.ZOOM_NUM_USERS) || 5;
+const NAME_OFFSET = parseInt(process.env.ZOOM_NAME_OFFSET) || 0;
 
 const FAKE_NAMES = [
   "Venkateswara Rao P",
@@ -71,6 +72,64 @@ const FAKE_NAMES = [
   "Ramamurthy G",
   "Seethamaha Lakshmi Ch",
   "Prasada Rao V",
+  "Kondala Rao Ch",
+  "Sugunamma T",
+  "Apparao M",
+  "Ratnamma B",
+  "Buchchi Babu K",
+  "Sooramma G",
+  "Muralidhar Rao N",
+  "Lakshmamma D",
+  "Veera Venkata Rao P",
+  "Nagalakshmi T",
+  "Seshagiri Rao M",
+  "Kamakshamma V",
+  "Durga Prasad K",
+  "Anandamma R",
+  "Rajagopal Rao B",
+  "Sakunthala Devi G",
+  "Hari Prasad Ch",
+  "Kanakadurga N",
+  "Someswara Rao D",
+  "Radhamma P",
+  "Janardhan Rao T",
+  "Subbamma M",
+  "Kesava Rao B",
+  "Seshamma K",
+  "Rama Mohana Rao G",
+  "Anasuya Devi V",
+  "Veera Raghava Rao N",
+  "Sitaramamma R",
+  "Chinna Rao D",
+  "Venkatalakshmi P",
+  "Govinda Rao T",
+  "Mangamma M",
+  "Butchi Raju B",
+  "Suryakantham K",
+  "Dharma Rao G",
+  "Leelavathi Ch",
+  "Adinarayana Rao N",
+  "Saraswathi Devi V",
+  "Rambabu R",
+  "Pushpavathi D",
+  "Satish Babu P",
+  "Devaki Devi T",
+  "Kishore Babu M",
+  "Jhansi Rani B",
+  "Prasanna Kumar K",
+  "Hemalatha G",
+  "Ravindra Babu Ch",
+  "Aruna Kumari N",
+  "Sivaji Rao V",
+  "Padmaja R",
+  "Surya Prakash D",
+  "Indira Devi P",
+  "Ranga Rao T",
+  "Suguna Devi M",
+  "Madhava Rao B",
+  "Ratna Kumari K",
+  "Prabhakar Rao G",
+  "Vasantha Devi Ch",
 ];
 
 const BROWSER_ARGS = [
