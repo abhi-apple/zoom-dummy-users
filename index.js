@@ -3,7 +3,7 @@ const readline = require("readline");
 
 // Track all active sessions
 const sessions = [];
-const allBrowsers = [];
+let browser = null;
 let nameIndex = 0;
 
 // --- Configuration (CLI args or env vars) ---
@@ -74,20 +74,34 @@ const FAKE_NAMES = [
   "Prasada Rao V",
 ];
 
-async function joinMeeting(name, meetingId, passcode) {
-  let browser;
-  try {
+async function getBrowser() {
+  if (!browser) {
     browser = await chromium.launch({
       headless: true,
       args: [
         "--disable-audio-output",
         "--disable-gpu",
-        "--disable-features=WebRtcHideLocalIpsWithMdns",
+        "--disable-dev-shm-usage",
+        "--disable-software-rasterizer",
+        "--disable-extensions",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--disable-translate",
+        "--no-first-run",
+        "--no-sandbox",
+        "--js-flags=--max-old-space-size=64",
       ],
     });
-    allBrowsers.push(browser);
+  }
+  return browser;
+}
 
-    const context = await browser.newContext({
+async function joinMeeting(name, meetingId, passcode) {
+  try {
+    const b = await getBrowser();
+
+    // Each user gets their own context (like an incognito window) — shares the browser process
+    const context = await b.newContext({
       permissions: [],
       userAgent:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -104,6 +118,11 @@ async function joinMeeting(name, meetingId, passcode) {
       };
       navigator.mediaDevices.enumerateDevices = async () => [];
     });
+
+    // Block images and media to save memory
+    await page.route("**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf}", (route) =>
+      route.abort()
+    );
 
     // Navigate to Zoom web client join page
     const joinUrl = `https://zoom.us/wc/join/${meetingId}`;
@@ -156,12 +175,9 @@ async function joinMeeting(name, meetingId, passcode) {
     } catch {}
 
     console.log(`  [+] ${name} joined`);
-    return { browser, page, name };
+    return { context, page, name };
   } catch (error) {
     console.error(`  [x] ${name} failed: ${error.message}`);
-    if (browser) {
-      try { browser.process().kill("SIGKILL"); } catch {}
-    }
     return null;
   }
 }
@@ -203,7 +219,7 @@ async function removeUsers(count) {
   for (let i = 0; i < toRemove; i++) {
     const session = sessions.pop();
     try {
-      session.browser.process().kill("SIGKILL");
+      await session.context.close();
       console.log(`  [-] ${session.name} removed`);
       removed++;
     } catch {}
@@ -255,8 +271,8 @@ async function main() {
       const n = parseInt(cmd.slice(1));
       if (n > 0) {
         console.log(`  Adding ${n} users...`);
-        const added = await addUsers(n, cleanMeetingId, PASSCODE);
-        console.log(`  Done. ${added} added. Total: ${sessions.length}`);
+        const a = await addUsers(n, cleanMeetingId, PASSCODE);
+        console.log(`  Done. ${a} added. Total: ${sessions.length}`);
       }
     } else if (cmd.startsWith("-")) {
       const n = parseInt(cmd.slice(1));
@@ -272,6 +288,7 @@ async function main() {
     } else if (cmd === "exit" || cmd === "quit") {
       console.log("  Removing all users...");
       await removeUsers(sessions.length);
+      if (browser) await browser.close();
       console.log("  Done. Bye!");
       process.exit(0);
     } else if (cmd === "help") {
@@ -286,13 +303,18 @@ async function main() {
 
 // Force kill everything on Ctrl+C
 process.on("SIGINT", () => {
-  console.log("\nKilling all browsers...");
-  for (const b of allBrowsers) {
-    try { b.process().kill("SIGKILL"); } catch {}
+  console.log("\nKilling browser...");
+  if (browser) {
+    try { browser.process().kill("SIGKILL"); } catch {}
   }
   console.log("All disconnected.");
   process.exit(0);
 });
-process.on("SIGTERM", () => process.exit(0));
+process.on("SIGTERM", () => {
+  if (browser) {
+    try { browser.process().kill("SIGKILL"); } catch {}
+  }
+  process.exit(0);
+});
 
 main();
