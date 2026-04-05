@@ -1,0 +1,14 @@
+services:
+  - type: worker
+    runtime: docker
+    name: zoom-dummy-users
+    repo: https://github.com/abhi-apple/zoom-dummy-users
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: ZOOM_MEETING_ID
+        sync: false
+      - key: ZOOM_PASSCODE
+        sync: false
+      - key: ZOOM_NUM_USERS
+        value: "50"

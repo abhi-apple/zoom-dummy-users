@@ -1,4 +1,10 @@
 const { chromium } = require("playwright");
+const readline = require("readline");
+
+// Track all active sessions
+const sessions = [];
+const allBrowsers = [];
+let nameIndex = 0;
 
 // --- Configuration (CLI args or env vars) ---
 const MEETING_ID = process.argv[2] || process.env.ZOOM_MEETING_ID;
@@ -6,39 +12,69 @@ const PASSCODE = process.argv[3] || process.env.ZOOM_PASSCODE || "";
 const NUM_USERS = parseInt(process.argv[4] || process.env.ZOOM_NUM_USERS) || 5;
 
 const FAKE_NAMES = [
-  "Rahul Sharma",
-  "Sneha Gupta",
-  "Arjun Reddy",
-  "Kavya Nair",
-  "Vikram Singh",
-  "Ananya Iyer",
-  "Rohit Verma",
-  "Meera Krishnan",
-  "Aditya Joshi",
-  "Pooja Deshmukh",
-  "Karthik Rajan",
-  "Divya Menon",
-  "Siddharth Rao",
-  "Neha Kulkarni",
-  "Amit Chauhan",
-  "Priya Pillai",
-  "Suresh Babu",
-  "Anjali Mishra",
-  "Deepak Yadav",
-  "Lakshmi Venkat",
-  "Manish Tiwari",
-  "Shruti Patil",
-  "Rajesh Kumar",
-  "Swati Bhatt",
-  "Nikhil Hegde",
-  "Ritu Agarwal",
-  "Prasad Rao",
-  "Tanvi Jain",
-  "Harish Shetty",
-  "Sanya Kapoor",
+  "Venkateswara Rao P",
+  "Satyanarayana Murthy K",
+  "Lakshmi Devi B",
+  "Ramachandra Reddy G",
+  "Padmavathi N",
+  "Srinivasa Rao T",
+  "Kamala Kumari D",
+  "Subba Rao M",
+  "Annapurna Devi K",
+  "Narasimha Rao V",
+  "Rajyalakshmi P",
+  "Bhaskar Rao Ch",
+  "Sarojini Devi M",
+  "Venkata Subbaiah R",
+  "Vijayalakshmi T",
+  "Raghunatha Reddy B",
+  "Suseela Devi G",
+  "Sambashiva Rao K",
+  "Parvathi Devi N",
+  "Hanumantha Rao D",
+  "Manga Devi P",
+  "Jagannadha Rao T",
+  "Seetharamamma V",
+  "Mallikarjuna Rao B",
+  "Ranganayaki M",
+  "Purushothama Rao G",
+  "Varalakshmi K",
+  "Appala Naidu Ch",
+  "Subbulakshmi R",
+  "Ramakrishna Rao N",
+  "Jayalakshmi D",
+  "Veerabhadra Rao P",
+  "Savithri Devi T",
+  "Gopala Krishna M",
+  "Tulasi Devi B",
+  "Chandra Sekhar Rao K",
+  "Nagamani G",
+  "Damodar Rao V",
+  "Santha Kumari N",
+  "Balakrishna Reddy R",
+  "Hymavathi D",
+  "Sathyanarayana Reddy P",
+  "Kamalamma T",
+  "Madhusudhan Rao Ch",
+  "Bharathi Devi M",
+  "Nageswara Rao B",
+  "Padma Devi K",
+  "Tirumala Rao G",
+  "Lalitha Devi V",
+  "Venkata Ramana N",
+  "Anantha Lakshmi R",
+  "Srinivasulu D",
+  "Rukmini Devi P",
+  "Koteshwara Rao T",
+  "Sarada Devi M",
+  "Gangadhara Rao B",
+  "Leela Devi K",
+  "Ramamurthy G",
+  "Seethamaha Lakshmi Ch",
+  "Prasada Rao V",
 ];
 
-async function joinMeeting(name, meetingId, passcode, index) {
+async function joinMeeting(name, meetingId, passcode) {
   let browser;
   try {
     browser = await chromium.launch({
@@ -49,6 +85,7 @@ async function joinMeeting(name, meetingId, passcode, index) {
         "--disable-features=WebRtcHideLocalIpsWithMdns",
       ],
     });
+    allBrowsers.push(browser);
 
     const context = await browser.newContext({
       permissions: [],
@@ -56,8 +93,6 @@ async function joinMeeting(name, meetingId, passcode, index) {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     });
 
-    // Block all camera/mic access so Zoom can't turn them on
-    await context.route("**/*", (route) => route.continue());
     await context.grantPermissions([]);
 
     const page = await context.newPage();
@@ -72,19 +107,15 @@ async function joinMeeting(name, meetingId, passcode, index) {
 
     // Navigate to Zoom web client join page
     const joinUrl = `https://zoom.us/wc/join/${meetingId}`;
-    console.log(`[${name}] Navigating to meeting...`);
-    await page.goto(joinUrl, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(joinUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
 
     // Wait for and accept cookies if prompted
     try {
       const cookieBtn = page.locator("#onetrust-accept-btn-handler");
       await cookieBtn.click({ timeout: 5000 });
-    } catch {
-      // No cookie banner, continue
-    }
+    } catch {}
 
     // Fill in the display name
-    console.log(`[${name}] Entering name...`);
     const nameInput = page.locator('input[id="input-for-name"]');
     await nameInput.waitFor({ state: "visible", timeout: 15000 });
     await nameInput.fill(name);
@@ -95,21 +126,10 @@ async function joinMeeting(name, meetingId, passcode, index) {
         const passcodeInput = page.locator('input[id="input-for-pwd"]');
         await passcodeInput.waitFor({ state: "visible", timeout: 5000 });
         await passcodeInput.fill(passcode);
-      } catch {
-        // No passcode field, continue
-      }
-    }
-
-    // Uncheck audio/video if checkboxes exist
-    try {
-      const muteCheckbox = page.locator('input[type="checkbox"]').first();
-      await muteCheckbox.waitFor({ state: "visible", timeout: 3000 });
-    } catch {
-      // No checkbox, continue
+      } catch {}
     }
 
     // Click the Join button
-    console.log(`[${name}] Clicking join...`);
     const joinButton = page.locator("button.zm-btn--primary, button:has-text('Join')").first();
     await joinButton.waitFor({ state: "visible", timeout: 10000 });
     await joinButton.click();
@@ -121,33 +141,86 @@ async function joinMeeting(name, meetingId, passcode, index) {
     try {
       const audioBtn = page.locator("button:has-text('Join Audio by Computer')");
       await audioBtn.click({ timeout: 8000 });
-    } catch {
-      // No audio dialog, continue
-    }
+    } catch {}
 
     // Turn off video if it's on
     try {
       const stopVideoBtn = page.locator("button:has-text('Stop Video'), button[aria-label*='stop my video']").first();
       await stopVideoBtn.click({ timeout: 5000 });
-    } catch {
-      // Video already off or button not found
-    }
+    } catch {}
 
     // Mute audio if not already muted
     try {
       const muteBtn = page.locator("button:has-text('Mute'), button[aria-label*='mute my audio']").first();
       await muteBtn.click({ timeout: 3000 });
-    } catch {
-      // Already muted or button not found
-    }
+    } catch {}
 
-    console.log(`[${name}] Successfully joined the meeting!`);
+    console.log(`  [+] ${name} joined`);
     return { browser, page, name };
   } catch (error) {
-    console.error(`[${name}] Failed to join: ${error.message}`);
-    if (browser) await browser.close();
+    console.error(`  [x] ${name} failed: ${error.message}`);
+    if (browser) {
+      try { browser.process().kill("SIGKILL"); } catch {}
+    }
     return null;
   }
+}
+
+async function addUsers(count, meetingId, passcode) {
+  const BATCH_SIZE = 5;
+  let added = 0;
+
+  for (let i = 0; i < count; i += BATCH_SIZE) {
+    const batchCount = Math.min(BATCH_SIZE, count - i);
+    const names = [];
+    for (let j = 0; j < batchCount; j++) {
+      const name = nameIndex < FAKE_NAMES.length
+        ? FAKE_NAMES[nameIndex]
+        : `User ${nameIndex + 1}`;
+      names.push(name);
+      nameIndex++;
+    }
+
+    const results = await Promise.all(
+      names.map((name) => joinMeeting(name, meetingId, passcode))
+    );
+
+    for (const r of results) {
+      if (r) {
+        sessions.push(r);
+        added++;
+      }
+    }
+  }
+
+  return added;
+}
+
+async function removeUsers(count) {
+  let removed = 0;
+  const toRemove = Math.min(count, sessions.length);
+
+  for (let i = 0; i < toRemove; i++) {
+    const session = sessions.pop();
+    try {
+      session.browser.process().kill("SIGKILL");
+      console.log(`  [-] ${session.name} removed`);
+      removed++;
+    } catch {}
+  }
+
+  return removed;
+}
+
+function showHelp() {
+  console.log(`
+  Commands:
+    +N       Add N users       (e.g. +10)
+    -N       Remove N users    (e.g. -5)
+    count    Show active users
+    list     List all user names
+    exit     Remove all and quit
+  `);
 }
 
 async function main() {
@@ -157,44 +230,69 @@ async function main() {
     process.exit(1);
   }
 
-  // Clean meeting ID (remove spaces/dashes)
   const cleanMeetingId = MEETING_ID.replace(/[\s-]/g, "");
 
-  console.log(`\nSpawning ${NUM_USERS} dummy users for meeting ${cleanMeetingId}...\n`);
+  console.log(`\nAdding ${NUM_USERS} users to meeting ${cleanMeetingId}...\n`);
 
-  const names = FAKE_NAMES.slice(0, NUM_USERS);
+  const added = await addUsers(NUM_USERS, cleanMeetingId, PASSCODE);
 
-  // Join with a small stagger to avoid rate limiting
-  const activeSessions = [];
-  for (const [i, name] of names.entries()) {
-    const session = await joinMeeting(name, cleanMeetingId, PASSCODE, i);
-    if (session) activeSessions.push(session);
+  console.log(`\n${added} users in meeting.`);
+  showHelp();
 
-    // Small delay between joins to avoid being flagged
-    if (i < names.length - 1) {
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-  }
-
-  console.log(`\n${activeSessions.length}/${NUM_USERS} users joined successfully.`);
-  console.log("Press Ctrl+C to disconnect all users and exit.\n");
-
-  // Keep the process alive until interrupted
-  process.on("SIGINT", async () => {
-    console.log("\nDisconnecting all users...");
-    for (const session of activeSessions) {
-      try {
-        await session.browser.close();
-        console.log(`[${session.name}] Disconnected.`);
-      } catch {
-        // Already closed
-      }
-    }
-    process.exit(0);
+  // Interactive prompt
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: "> ",
   });
 
-  // Keep alive
-  await new Promise(() => {});
+  rl.prompt();
+
+  rl.on("line", async (line) => {
+    const cmd = line.trim();
+
+    if (cmd.startsWith("+")) {
+      const n = parseInt(cmd.slice(1));
+      if (n > 0) {
+        console.log(`  Adding ${n} users...`);
+        const added = await addUsers(n, cleanMeetingId, PASSCODE);
+        console.log(`  Done. ${added} added. Total: ${sessions.length}`);
+      }
+    } else if (cmd.startsWith("-")) {
+      const n = parseInt(cmd.slice(1));
+      if (n > 0) {
+        const removed = await removeUsers(n);
+        console.log(`  Done. ${removed} removed. Total: ${sessions.length}`);
+      }
+    } else if (cmd === "count") {
+      console.log(`  Active users: ${sessions.length}`);
+    } else if (cmd === "list") {
+      sessions.forEach((s, i) => console.log(`  ${i + 1}. ${s.name}`));
+      if (sessions.length === 0) console.log("  No active users.");
+    } else if (cmd === "exit" || cmd === "quit") {
+      console.log("  Removing all users...");
+      await removeUsers(sessions.length);
+      console.log("  Done. Bye!");
+      process.exit(0);
+    } else if (cmd === "help") {
+      showHelp();
+    } else if (cmd) {
+      console.log(`  Unknown command. Type "help" for commands.`);
+    }
+
+    rl.prompt();
+  });
 }
+
+// Force kill everything on Ctrl+C
+process.on("SIGINT", () => {
+  console.log("\nKilling all browsers...");
+  for (const b of allBrowsers) {
+    try { b.process().kill("SIGKILL"); } catch {}
+  }
+  console.log("All disconnected.");
+  process.exit(0);
+});
+process.on("SIGTERM", () => process.exit(0));
 
 main();
